@@ -20,7 +20,7 @@ activate it step 3 and 4: step 3: now that its named mychat.html right click on 
 
 heads up! - mychat does not need an account to run and runs directly in your web browser.
 
-when you complete the process of running mychat you get a private url that is from your computer and nobody else can use it! - well, unless you sign in to ChatGPT and make a new game with its code, and send the link to somebody on the ChatGPT chat.
+When you open MyChat, your browser creates a private local file URL that only works on your computer where the file is stored.
 
 IMPORTANT: REAL-TIME HELPBOT CHAT
 
