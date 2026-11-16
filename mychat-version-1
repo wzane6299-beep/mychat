@@ -1,0 +1,220 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MyChat</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;background:#050817;color:white;font-family:Arial,sans-serif}
+header{padding:18px;text-align:center;color:#35E9FF;font-size:30px;font-weight:900;text-shadow:0 0 12px #35E9FF;border-bottom:1px solid #16445d}
+nav{display:flex;justify-content:center;gap:10px;padding:12px;flex-wrap:wrap}
+button{background:#102b45;color:#35E9FF;border:1px solid #1688a5;border-radius:9px;padding:10px 14px;font-weight:bold;cursor:pointer}
+button:hover{background:#164566}
+button:disabled{opacity:.35;cursor:not-allowed}
+#app{width:100%;max-width:850px;margin:auto;padding:12px;min-width:0}
+.panel{width:100%;min-width:0;background:#081528;border:1px solid #16445d;border-radius:14px;padding:14px;margin-bottom:12px}
+input{width:100%;min-width:0;padding:13px;border-radius:9px;border:1px solid #1688a5;background:#071426;outline:none;font-size:16px}
+#input,#helpInput{color:#FF8A24!important;-webkit-text-fill-color:#FF8A24!important;caret-color:#FF8A24!important}
+#input::placeholder,#helpInput::placeholder{color:#35E9FF!important;-webkit-text-fill-color:#35E9FF!important;opacity:.7}
+.chat-tabs{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px;min-width:0}
+.chat-tab{display:flex;gap:5px;align-items:center;min-width:0}
+.chat-tab button{padding:8px 11px}
+.chat-tab .close{color:#ff7777;border-color:#824444;padding:7px 9px}
+.messages{display:flex;flex-direction:column;gap:10px;width:100%;min-width:0;height:360px;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;background:#020914;border:1px solid #153a50;border-radius:10px;padding:12px;scroll-behavior:smooth;scrollbar-width:thin;scrollbar-color:#1688a5 #020914}
+.message{display:block;width:fit-content;max-width:85%;min-width:0;padding:11px 13px;border-radius:12px;line-height:1.4;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;flex-shrink:0}
+.user{align-self:flex-end;background:#17314B;border:1px solid #FF8A24;color:#FF8A24}
+.bot{align-self:flex-start;background:#10253A;border:1px solid #167E9B;color:#35E9FF}
+.scroll-controls{display:flex;justify-content:space-between;gap:10px;margin:10px 0}
+.scroll-controls button{flex:1;min-width:0}
+.send-row{display:flex;gap:8px;margin-top:10px;min-width:0}
+.send-row input{flex:1;min-width:0}
+.send-row button{white-space:nowrap}
+.preview{margin-top:8px;color:#35E9FF;font-size:13px;min-height:19px;overflow-wrap:anywhere}
+.preview strong{color:#FF8A24;font-weight:normal;overflow-wrap:anywhere}
+#helpTyping{display:none;color:#35E9FF;padding:10px 4px;font-weight:bold}
+#helpTyping .dots{display:inline-block;animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.page-title{color:#35E9FF;font-size:21px;font-weight:bold;margin:5px 0 12px}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<header>MyChat</header>
+<nav>
+ <button onclick="openPage('main')">My Chats</button>
+ <button onclick="openPage('help')">Help Chat</button>
+</nav>
+<div id="app">
+ <section id="mainPage" class="panel">
+  <div class="page-title">My Chats</div>
+  <div id="chatTabs" class="chat-tabs"></div>
+  <div id="messages" class="messages"></div>
+  <div class="scroll-controls">
+   <button id="mainUp" onclick="scrollChat(-1)">↑ Scroll Up</button>
+   <button id="mainDown" onclick="scrollChat(1)">↓ Scroll Down</button>
+  </div>
+  <div class="send-row">
+   <input id="input" placeholder="Type a message..." oninput="updatePreview()" onkeydown="handleMainEnter(event)">
+   <button onclick="sendMessage()">Send</button>
+  </div>
+  <div class="preview">Typing preview: <strong id="previewText">...</strong></div>
+ </section>
+ <section id="helpPage" class="panel hidden">
+  <div class="page-title">Help Chat — Helpbot</div>
+  <div id="helpMessages" class="messages"></div>
+  <div class="scroll-controls">
+   <button id="helpUp" onclick="scrollChat(-1)">↑ Scroll Up</button>
+   <button id="helpDown" onclick="scrollChat(1)">↓ Scroll Down</button>
+  </div>
+  <div class="send-row">
+   <input id="helpInput" placeholder="Ask Helpbot something..." oninput="updateHelpPreview()" onkeydown="handleHelpEnter(event)">
+   <button id="helpSendButton" onclick="sendHelp()">Send</button>
+  </div>
+  <div class="preview">Typing preview: <strong id="helpPreviewText">...</strong></div>
+  <div id="helpTyping">💬 Helpbot is typing<span class="dots">...</span></div>
+ </section>
+</div>
+<script>
+let currentPage="main",nextChatId=2,activeChatId=1;
+let helpScrollTop=0,helpSending=false,helpTimer=null;
+let chats=[{id:1,name:"Chat 1",messages:[{who:"bot",text:"Welcome to MyChat!"}],scrollTop:0}];
+let helpMessages=[{who:"bot",text:"Hey! I'm Helpbot. Ask me for jokes, riddles, facts, or help using MyChat!"}];
+
+function createChat(){
+ saveScrollPosition();
+ const id=nextChatId++;
+ chats.push({id,name:"Chat "+id,messages:[{who:"bot",text:"New chat started! What would you like to talk about?"}],scrollTop:0});
+ activeChatId=id;renderMain();
+ document.getElementById("input").focus();
+}
+function switchChat(id){saveScrollPosition();activeChatId=id;renderMain()}
+function closeChat(id){
+ if(chats.length===1){alert("You need to keep at least one chat open!");return}
+ saveScrollPosition();chats=chats.filter(c=>c.id!==id);
+ if(activeChatId===id)activeChatId=chats[0].id;
+ renderMain();
+}
+function openPage(page){
+ saveScrollPosition();currentPage=page;
+ document.getElementById("mainPage").classList.toggle("hidden",page!=="main");
+ document.getElementById("helpPage").classList.toggle("hidden",page!=="help");
+ if(page==="main")renderMain();else renderHelp();
+}
+function getCurrentArea(){
+ return currentPage==="help"?document.getElementById("helpMessages"):document.getElementById("messages");
+}
+function saveScrollPosition(){
+ const area=getCurrentArea();if(!area)return;
+ if(currentPage==="help")helpScrollTop=area.scrollTop;
+ else{const chat=chats.find(c=>c.id===activeChatId);if(chat)chat.scrollTop=area.scrollTop}
+}
+function restoreScrollPosition(area,position){
+ requestAnimationFrame(()=>{area.scrollTop=position;updateScrollButtons()});
+}
+function updateScrollButtons(){
+ const area=getCurrentArea();if(!area)return;
+ const up=document.getElementById(currentPage==="help"?"helpUp":"mainUp");
+ const down=document.getElementById(currentPage==="help"?"helpDown":"mainDown");
+ if(!up||!down)return;
+ const max=Math.max(0,area.scrollHeight-area.clientHeight);
+ up.disabled=area.scrollTop<=1;down.disabled=area.scrollTop>=max-1;
+}
+function scrollChat(direction){
+ const area=getCurrentArea();if(!area)return;
+ const max=Math.max(0,area.scrollHeight-area.clientHeight);
+ const target=direction<0?Math.max(0,area.scrollTop-250):Math.min(max,area.scrollTop+250);
+ area.scrollTo({top:target,behavior:"smooth"});
+ if(currentPage==="help")helpScrollTop=target;
+ else{const chat=chats.find(c=>c.id===activeChatId);if(chat)chat.scrollTop=target}
+}
+function renderTabs(){
+ const holder=document.getElementById("chatTabs");holder.innerHTML="";
+ chats.forEach(chat=>{
+  const wrapper=document.createElement("div");wrapper.className="chat-tab";
+  const tab=document.createElement("button");tab.textContent=chat.name;
+  tab.style.borderColor=chat.id===activeChatId?"#35E9FF":"#16445d";
+  tab.onclick=()=>switchChat(chat.id);
+  const close=document.createElement("button");close.className="close";close.textContent="×";
+  close.onclick=()=>closeChat(chat.id);
+  wrapper.append(tab,close);holder.appendChild(wrapper);
+ });
+ const add=document.createElement("button");add.textContent="+ New Chat";add.onclick=createChat;holder.appendChild(add);
+}
+function addBubble(area,message){
+ const bubble=document.createElement("div");bubble.className="message "+message.who;
+ bubble.textContent=message.text;area.appendChild(bubble);
+}
+function renderMain(){
+ renderTabs();const area=document.getElementById("messages");area.innerHTML="";
+ const chat=chats.find(c=>c.id===activeChatId);if(!chat)return;
+ chat.messages.forEach(message=>addBubble(area,message));
+ restoreScrollPosition(area,chat.scrollTop);
+}
+function renderHelp(){
+ const area=document.getElementById("helpMessages");area.innerHTML="";
+ helpMessages.forEach(message=>addBubble(area,message));
+ document.getElementById("helpTyping").style.display=helpSending?"block":"none";
+ document.getElementById("helpSendButton").disabled=helpSending;
+ restoreScrollPosition(area,helpScrollTop);
+}
+function updatePreview(){const v=document.getElementById("input").value;document.getElementById("previewText").textContent=v||"..."}
+function updateHelpPreview(){const v=document.getElementById("helpInput").value;document.getElementById("helpPreviewText").textContent=v||"..."}
+function handleMainEnter(event){if(event.key==="Enter"){event.preventDefault();sendMessage()}}
+function sendMessage(){
+ const input=document.getElementById("input"),text=input.value.trim();if(!text)return;
+ const chat=chats.find(c=>c.id===activeChatId);if(!chat)return;
+ chat.messages.push({who:"user",text});input.value="";updatePreview();
+ chat.scrollTop=999999;renderMain();input.focus();
+}
+function makeVariants(){
+ const list=[];
+ const first=["Here's something interesting","Absolutely","Good question","Here's a fun one","Let's figure this out","I've got an idea","Check this out","Sure thing","Here's a little tip","Let's explore that"];
+ const second=["for you","to get started","that might help","just for fun","about that topic","to make things easier","that is worth knowing","to try next","to think about","for your next chat"];
+ for(let a=0;a<10;a++)for(let b=0;b<10;b++)list.push(first[a]+" "+second[b]);
+ return list;
+}
+const openers=makeVariants(),endings=makeVariants(),jokeCores=makeVariants(),factCores=makeVariants(),riddleCores=makeVariants(),mychatCores=makeVariants();
+function hashText(text){let hash=0;for(let i=0;i<text.length;i++)hash=(hash*31+text.charCodeAt(i))>>>0;return hash}
+function helpbotReply(message){
+ const q=message.toLowerCase(),hash=hashText(q);let category,cores;
+ if(q.includes("riddle")||q.includes("puzzle")||q.includes("guess")){category="riddle";cores=riddleCores}
+ else if(q.includes("mychat")||q.includes("chat")||q.includes("button")||q.includes("scroll")||q.includes("tab")||q.includes("broken")||q.includes("work")||q.includes("fix")){category="mychat";cores=mychatCores}
+ else if(q.includes("fact")||q.includes("animal")||q.includes("space")||q.includes("ocean")||q.includes("planet")||q.includes("nature")){category="fact";cores=factCores}
+ else{category="joke";cores=jokeCores}
+ const opener=openers[hash%100],core=cores[Math.floor(hash/100)%100],ending=endings[Math.floor(hash/10000)%100];
+ let answer;
+ if(category==="riddle")answer="What has keys but can't open locks? A piano! Here's another one: What has a face and two hands but no arms? A clock.";
+ else if(category==="mychat")answer="For MyChat help: switch between chat tabs, use the scroll buttons to move through messages, and use Help Chat whenever you need a tip.";
+ else if(category==="fact")answer="Fun fact: octopuses have three hearts, and some species can change their color and texture to blend into their surroundings!";
+ else answer="Why did the computer go to the doctor? Because it caught a virus! Want another joke?";
+ return opener+"! "+answer+" "+core+". "+ending+".";
+}
+function handleHelpEnter(event){if(event.key==="Enter"){event.preventDefault();sendHelp()}}
+function sendHelp(){
+ if(helpSending)return;
+ const input=document.getElementById("helpInput"),text=input.value.trim();if(!text)return;
+ helpMessages.push({who:"user",text});input.value="";updateHelpPreview();
+ helpSending=true;helpScrollTop=999999;renderHelp();
+ const reply=helpbotReply(text);
+ helpTimer=setTimeout(()=>{
+  helpMessages.push({who:"bot",text:reply});
+  helpScrollTop=999999;helpSending=false;helpTimer=null;
+  renderHelp();document.getElementById("helpInput").focus();
+ },4000);
+}
+function addScrollListeners(){
+ ["messages","helpMessages"].forEach(id=>{
+  const area=document.getElementById(id);
+  area.addEventListener("scroll",()=>{
+   if((id==="helpMessages"&&currentPage==="help")||(id==="messages"&&currentPage==="main")){
+    saveScrollPosition();updateScrollButtons();
+   }
+  });
+ });
+}
+addScrollListeners();renderMain();renderHelp();openPage("main");
+</script>
+</body>
+</html>
